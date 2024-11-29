@@ -1,5 +1,8 @@
 import nltk
-
+import re
+import pandas as pd
+import xml.etree.ElementTree as ET # to read the xml files
+from nltk import sent_tokenize
 
 def extract_tags(file):
     '''
@@ -90,7 +93,7 @@ def sentence_encoding(file):
     return df
 
 
-def token_annotator(file):
+def token_annotator(file, tokenizer):
     temp_df = sentence_encoding(file)  # take the data frame and turn them into individual lists
 
     type_list = temp_df['Type'].tolist()
@@ -100,7 +103,6 @@ def token_annotator(file):
     sentence_list = list(temp_unique_sentence_list)  # take out duplicate sentences
 
     tokenized_word = []  # separate individual text into words (e.g, Mia E. Tapia to "Mia","E.","Tapia")
-    tokenizer = get_tokenizer()
     for phrase in word_list:
         tokenized_word.append(tokenizer.tokenize(phrase))
 
@@ -112,7 +114,7 @@ def token_annotator(file):
         tokenized_sentence.append(token_list)
         temp_list = ['O' for length in range(len(token_list))]
         for j in range(len(tokenized_word)):
-            if all(elem in token_list for elem in tokenized_word[j]) == True:
+            if all(elem in token_list for elem in tokenized_word[j]):
                 # print(token_list, tokenized_word[j])
                 for word in tokenized_word[j]:
                     temp_list[token_list.index(word)] = (type_list[j])
@@ -131,7 +133,7 @@ def type_token_generator(file, tokenizer):
 
     type_token = []
 
-    sentence_list, encoded_token = token_annotator(file)
+    sentence_list, encoded_token = token_annotator(file, tokenizer)
 
     for sentence in tokenized_sentences:
         if sentence in sentence_list:
@@ -159,13 +161,13 @@ def type_token_generator(file, tokenizer):
             tokenized_sentences1.append(tokenized_sentences[i])
             type_token1.append(type_token[i])
 
-    return tokenized_sentences1, type_token1, label_list1
+    return all_sentences, tokenized_sentences, type_token, label_list
 
 
-def bert_array(file, max_seq_length, tokenizer):
+def bert_array(file, tokenizer, max_seq_length):
     '''This function generates the 5 lists of array that is required to feed into the model'''
 
-    token_sentence, type_token, label_list = type_token_generator(file)
+    token_sentence, type_token, label_list = type_token_generator(file, tokenizer)
 
     token_list = []
     input_IDs = []
@@ -180,7 +182,7 @@ def bert_array(file, max_seq_length, tokenizer):
         length_before_padding = len(sentence)
         temp_inputID = [1 for i in range(length_before_padding)]  # insert 1 for [CLS] and [SEP] for mask
         sentence.extend(['[PAD]' for i in range(max_seq_length - len(sentence))])
-        temp_inputID.extend([0 for i in range(max_seq_length - len(temp_inputID))])
+        temp_inputID.extend([0 for i in range(max_seq_length - len(temp_inputID))]) # add zeros for pads
         token_list.append(sentence)
         input_mask.append(temp_inputID)
         segment_ID.append([0 for i in range(max_seq_length)])
@@ -200,14 +202,14 @@ def bert_array(file, max_seq_length, tokenizer):
     return token_list, input_IDs, input_mask, segment_ID, label
 
 
-def generate_train_data(training_files, max_seq_length=20):  # Max number of file number is 789
+def generate_train_data(training_files, tokenizer, max_seq_length=20):  # Max number of file number is 789
     """
         This function runs through a loop to append the tokens, input ids, input masks, segement id and labels to 5
         individual np arrays
     """
     temp_list0, temp_list1, temp_list2, temp_list3, temp_list4 = [], [], [], [], []
     for file in training_files:
-        temp_data = bert_array(file, max_seq_length, tokenizer=nltk.NLTKWordTokenizer)
+        temp_data = bert_array(file, tokenizer, max_seq_length)
 
         for j in range(len(temp_data[0])):
             temp_list0.append(temp_data[0][j])
@@ -215,14 +217,32 @@ def generate_train_data(training_files, max_seq_length=20):  # Max number of fil
             temp_list2.append(temp_data[2][j])
             temp_list3.append(temp_data[3][j])
             temp_list4.append(temp_data[4][j])
-
-    #   np_token_list=np.array(temp_list0)
-    #   np_input_ids=np.array(temp_list1)
-    #   np_input_masks=np.array(temp_list2)
-    #   np_segment_ids=np.array(temp_list3)
-    #   np_labels=np.array(temp_list4)
-
-    # return np_token_list, np_input_ids, np_input_masks, np_segment_ids, np_labels
     return temp_list0, temp_list1, temp_list2, temp_list3, temp_list4
 
-# change number of file here (MAX:789)
+# TRAINING_SET1 = "dataset/2014_training-PHI-Gold-Set1/training-PHI-Gold-Set1"
+TRAINING_SET1 = "dataset/test"
+
+# TRAINING_SET2 = "dataset/training-PHI-Gold-Set2/training-PHI-Gold-Set2"
+
+TESTING_SET = "dataset/testing-PHI-Gold-fixed/testing-PHI-Gold-fixed"
+
+def load_data():
+
+    train_filelist = []
+    test_filelist = []
+    for file in os.listdir(TRAINING_SET1):
+        if ".xml" in file:
+            train_filelist.append(os.path.join(TRAINING_SET1, file))
+    # for file in os.listdir(TRAINING_SET2):
+    #     if ".xml" in file:
+    #         train_filelist.append(os.path.join(TRAINING_SET2, file))
+    for file in os.listdir(TESTING_SET):
+        if ".xml" in file:
+            test_filelist.append(os.path.join(TESTING_SET, file))
+
+    print(f"loading the training data : {len(train_filelist)}")
+    print(f"loading the testing data: {len(test_filelist)}")
+    return train_filelist, test_filelist
+
+
+

@@ -34,8 +34,9 @@ class BertBaseLine:
         :return:
             train, validation, test datasets
         """
+        self.pretrained_model()
         train_token_list, train_input_ids, train_input_masks, train_segment_ids, train_labels = generate_train_data(
-            training_files, 20, self.tokenizer)
+            training_files, self.tokenizer, 20)
 
     def compute_metrics(self):
         """
